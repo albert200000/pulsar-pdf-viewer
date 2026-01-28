@@ -1,3 +1,8 @@
+> [!NOTE]
+> I do not use Atom or it's successor Pulsar anymore, do not work in this repository, and have therefore archived it.
+> If you are interested in taking it over, please let me know.
+
+
 # pdfjs-viewer
 
 pdfjs-viewer is a package for the [Atom editor](https://atom.io/) that makes it possible to view PDF files in Atom panes. It is a wrapper around Mozilla's [PDF.js](https://github.com/mozilla/pdf.js) library including its viewer application, adapted for the Atom environment.
