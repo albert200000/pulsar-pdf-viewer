@@ -1,21 +1,43 @@
 {
-  "name": "pdfjs-viewer",
-  "main": "./lib/pdfjs-viewer",
+  "name": "pulsar-pdf-viewer",
+  "main": "./dist/main.js",
   "version": "1.3.0",
-  "description": "Themed, fully featured PDF viewer for the Atom editor",
+  "description": "",
   "keywords": [],
-  "repository": "https://github.com/allefeld/atom-pdfjs-viewer",
+  "repository": "https://github.com/albert200000/pulsar-pdf-viewer",
   "license": "MIT",
   "engines": {
     "atom": ">=1.0.0 <2.0.0"
   },
+  "scripts": {
+    "dev": "cross-env NODE_ENV=development parcel watch --target main lib/pdf-viewer.js",
+    "build": "cross-env NODE_ENV=production parcel build --target main lib/pdf-viewer.js"
+  },
   "dependencies": {
-    "path": ">=0.12.7",
     "@fortawesome/fontawesome-free": "5.11.2",
     "chokidar": ">=3.3.0",
-    "fs-extra": ">=8.1.0 <9.0.0"
+    "cross-env": "^10.1.0",
+    "fs-extra": ">=8.1.0 <9.0.0",
+    "path": ">=0.12.7"
   },
   "deserializers": {
-    "PdfjsViewerView": "deserializeView"
+    "PdfViewerView": "deserializeView"
+  },
+  "devDependencies": {
+    "parcel": "^2.16.4"
+  },
+  "targets": {
+    "main": {
+      "context": "electron-renderer",
+      "engines": {
+        "electron": ">=12.x"
+      },
+      "includeNodeModules": {
+        "atom": false,
+        "electron": false
+      },
+      "outputFormat": "commonjs",
+      "isLibrary": true
+    }
   }
 }

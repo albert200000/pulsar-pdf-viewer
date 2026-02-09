@@ -3,16 +3,16 @@
 > If you are interested in taking it over, please let me know.
 
 
-# pdfjs-viewer
+# pdf-viewer
 
-pdfjs-viewer is a package for the [Atom editor](https://atom.io/) that makes it possible to view PDF files in Atom panes. It is a wrapper around Mozilla's [PDF.js](https://github.com/mozilla/pdf.js) library including its viewer application, adapted for the Atom environment.
+pdf-viewer is a package for the [Atom editor](https://atom.io/) that makes it possible to view PDF files in Atom panes. It is a wrapper around Mozilla's [PDF.js](https://github.com/mozilla/pdf.js) library including its viewer application, adapted for the Atom environment.
 
-![screenshot](pdfjs-viewer.png)
+![screenshot](pdf-viewer.png)
 
 
 ## Comparison with other PDF viewer packages
 
-pdfjs-viewer has the same purpose as the [pdf-view](https://atom.io/packages/pdf-view) and [pdf-view-plus](https://atom.io/packages/pdf-view-plus) packages, but differs in several respects:
+pdf-viewer has the same purpose as the [pdf-view](https://atom.io/packages/pdf-view) and [pdf-view-plus](https://atom.io/packages/pdf-view-plus) packages, but differs in several respects:
 
 Other than pdf-view, this package features the full viewer UI, including
 
@@ -31,7 +31,7 @@ Moreover, links in the PDF have been made functional (internal and external, inc
 
 ## Installation
 
-Install from Atom's Settings/Install dialog (search for `pdfjs-viewer`) or via `apm install pdfjs-viewer`.
+Install from Atom's Settings/Install dialog (search for `pdf-viewer`) or via `apm install pdf-viewer`.
 
 
 ## Usage
