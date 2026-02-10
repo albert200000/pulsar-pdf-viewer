@@ -2853,6 +2853,27 @@ const $0bb8c055943947a3$var$isObject = (val)=>val && typeof val === 'object' && 
  * @api public
  */ $0bb8c055943947a3$var$picomatch.scan = (input, options)=>$81Xyl(input, options);
 /**
+ * Compile a regular expression from the `state` object returned by the
+ * [parse()](#parse) method.
+ *
+ * @param {Object} `state`
+ * @param {Object} `options`
+ * @param {Boolean} `returnOutput` Intended for implementors, this argument allows you to return the raw output from the parser.
+ * @param {Boolean} `returnState` Adds the state to a `state` property on the returned regex. Useful for implementors and debugging.
+ * @return {RegExp}
+ * @api public
+ */ $0bb8c055943947a3$var$picomatch.compileRe = (state, options, returnOutput = false, returnState = false)=>{
+    if (returnOutput === true) return state.output;
+    const opts = options || {};
+    const prepend = opts.contains ? '' : '^';
+    const append = opts.contains ? '' : '$';
+    let source = `${prepend}(?:${state.output})${append}`;
+    if (state && state.negated === true) source = `^(?!${source}).*$`;
+    const regex = $0bb8c055943947a3$var$picomatch.toRegex(source, options);
+    if (returnState === true) regex.state = state;
+    return regex;
+};
+/**
  * Create a regular expression from a parsed glob pattern.
  *
  * ```js
@@ -2865,37 +2886,18 @@ const $0bb8c055943947a3$var$isObject = (val)=>val && typeof val === 'object' && 
  * ```
  * @param {String} `state` The object returned from the `.parse` method.
  * @param {Object} `options`
+ * @param {Boolean} `returnOutput` Implementors may use this argument to return the compiled output, instead of a regular expression. This is not exposed on the options to prevent end-users from mutating the result.
+ * @param {Boolean} `returnState` Implementors may use this argument to return the state from the parsed glob with the returned regular expression.
  * @return {RegExp} Returns a regex created from the given pattern.
  * @api public
- */ $0bb8c055943947a3$var$picomatch.compileRe = (parsed, options, returnOutput = false, returnState = false)=>{
-    if (returnOutput === true) return parsed.output;
-    const opts = options || {};
-    const prepend = opts.contains ? '' : '^';
-    const append = opts.contains ? '' : '$';
-    let source = `${prepend}(?:${parsed.output})${append}`;
-    if (parsed && parsed.negated === true) source = `^(?!${source}).*$`;
-    const regex = $0bb8c055943947a3$var$picomatch.toRegex(source, options);
-    if (returnState === true) regex.state = parsed;
-    return regex;
-};
-$0bb8c055943947a3$var$picomatch.makeRe = (input, options, returnOutput = false, returnState = false)=>{
+ */ $0bb8c055943947a3$var$picomatch.makeRe = (input, options = {}, returnOutput = false, returnState = false)=>{
     if (!input || typeof input !== 'string') throw new TypeError('Expected a non-empty string');
-    const opts = options || {};
     let parsed = {
         negated: false,
         fastpaths: true
     };
-    let prefix = '';
-    let output;
-    if (input.startsWith('./')) {
-        input = input.slice(2);
-        prefix = parsed.prefix = './';
-    }
-    if (opts.fastpaths !== false && (input[0] === '.' || input[0] === '*')) output = $kKIsd.fastpaths(input, options);
-    if (output === undefined) {
-        parsed = $kKIsd(input, options);
-        parsed.prefix = prefix + (parsed.prefix || '');
-    } else parsed.output = output;
+    if (options.fastpaths !== false && (input[0] === '.' || input[0] === '*')) parsed.output = $kKIsd.fastpaths(input, options);
+    if (!parsed.output) parsed = $kKIsd(input, options);
     return $0bb8c055943947a3$var$picomatch.compileRe(parsed, options, returnOutput, returnState);
 };
 /**
@@ -2961,7 +2963,8 @@ const $5d8c9cb0cb9f69c5$var$depth = (token)=>{
 /**
  * Quickly scans a glob pattern and returns an object with a handful of
  * useful properties, like `isGlob`, `path` (the leading non-glob, if it exists),
- * `glob` (the actual pattern), and `negated` (true if the path starts with `!`).
+ * `glob` (the actual pattern), `negated` (true if the path starts with `!` but not
+ * with `!(`) and `negatedExtglob` (true if the path starts with `!(`).
  *
  * ```js
  * const pm = require('picomatch');
@@ -2991,6 +2994,7 @@ const $5d8c9cb0cb9f69c5$var$depth = (token)=>{
     let braceEscaped = false;
     let backslashes = false;
     let negated = false;
+    let negatedExtglob = false;
     let finished = false;
     let braces = 0;
     let prev;
@@ -3076,6 +3080,7 @@ const $5d8c9cb0cb9f69c5$var$depth = (token)=>{
                 isGlob = token.isGlob = true;
                 isExtglob = token.isExtglob = true;
                 finished = true;
+                if (code === $5d8c9cb0cb9f69c5$require$CHAR_EXCLAMATION_MARK && index === start) negatedExtglob = true;
                 if (scanToEnd === true) {
                     while(eos() !== true && (code = advance())){
                         if (code === $5d8c9cb0cb9f69c5$require$CHAR_BACKWARD_SLASH) {
@@ -3107,19 +3112,22 @@ const $5d8c9cb0cb9f69c5$var$depth = (token)=>{
             if (scanToEnd === true) continue;
             break;
         }
-        if (code === $5d8c9cb0cb9f69c5$require$CHAR_LEFT_SQUARE_BRACKET) while(eos() !== true && (next = advance())){
-            if (next === $5d8c9cb0cb9f69c5$require$CHAR_BACKWARD_SLASH) {
-                backslashes = token.backslashes = true;
-                advance();
-                continue;
+        if (code === $5d8c9cb0cb9f69c5$require$CHAR_LEFT_SQUARE_BRACKET) {
+            while(eos() !== true && (next = advance())){
+                if (next === $5d8c9cb0cb9f69c5$require$CHAR_BACKWARD_SLASH) {
+                    backslashes = token.backslashes = true;
+                    advance();
+                    continue;
+                }
+                if (next === $5d8c9cb0cb9f69c5$require$CHAR_RIGHT_SQUARE_BRACKET) {
+                    isBracket = token.isBracket = true;
+                    isGlob = token.isGlob = true;
+                    finished = true;
+                    break;
+                }
             }
-            if (next === $5d8c9cb0cb9f69c5$require$CHAR_RIGHT_SQUARE_BRACKET) {
-                isBracket = token.isBracket = true;
-                isGlob = token.isGlob = true;
-                finished = true;
-                if (scanToEnd === true) continue;
-                break;
-            }
+            if (scanToEnd === true) continue;
+            break;
         }
         if (opts.nonegate !== true && code === $5d8c9cb0cb9f69c5$require$CHAR_EXCLAMATION_MARK && index === start) {
             negated = token.negated = true;
@@ -3187,7 +3195,8 @@ const $5d8c9cb0cb9f69c5$var$depth = (token)=>{
         isGlob: isGlob,
         isExtglob: isExtglob,
         isGlobstar: isGlobstar,
-        negated: negated
+        negated: negated,
+        negatedExtglob: negatedExtglob
     };
     if (opts.tokens === true) {
         state.maxDepth = 0;
@@ -3571,7 +3580,7 @@ var $EOaiL = parcelRequire("EOaiL");
    * Tokenizing helpers
    */ const eos = ()=>state.index === len - 1;
     const peek = state.peek = (n = 1)=>input[state.index + n];
-    const advance = state.advance = ()=>input[++state.index];
+    const advance = state.advance = ()=>input[++state.index] || '';
     const remaining = ()=>input.slice(state.index + 1);
     const consume = (value = '', num = 0)=>{
         state.consumed += value;
@@ -3619,7 +3628,7 @@ var $EOaiL = parcelRequire("EOaiL");
                 state.output += prev.output;
             }
         }
-        if (extglobs.length && tok.type !== 'paren' && !EXTGLOB_CHARS[tok.value]) extglobs[extglobs.length - 1].inner += tok.value;
+        if (extglobs.length && tok.type !== 'paren') extglobs[extglobs.length - 1].inner += tok.value;
         if (tok.value || tok.output) append(tok);
         if (prev && prev.type === 'text' && tok.type === 'text') {
             prev.value += tok.value;
@@ -3656,11 +3665,24 @@ var $EOaiL = parcelRequire("EOaiL");
     };
     const extglobClose = (token)=>{
         let output = token.close + (opts.capture ? ')' : '');
+        let rest;
         if (token.type === 'negate') {
             let extglobStar = star;
             if (token.inner && token.inner.length > 1 && token.inner.includes('/')) extglobStar = globstar(opts);
             if (extglobStar !== star || eos() || /^\)+$/.test(remaining())) output = token.close = `)$))${extglobStar}`;
-            if (token.prev.type === 'bos' && eos()) state.negatedExtglob = true;
+            if (token.inner.includes('*') && (rest = remaining()) && /^\.[^\\/.]+$/.test(rest)) {
+                // Any non-magical string (`.ts`) or even nested expression (`.{ts,tsx}`) can follow after the closing parenthesis.
+                // In this case, we need to parse the string and use it in the output of the original pattern.
+                // Suitable patterns: `/!(*.d).ts`, `/!(*.d).{ts,tsx}`, `**/!(*-dbg).@(js)`.
+                //
+                // Disabling the `fastpaths` option due to a problem with parsing strings as `.ts` in the pattern like `**/!(*.d).ts`.
+                const expression = $f1ba962b40e679f3$var$parse(rest, {
+                    ...options,
+                    fastpaths: false
+                }).output;
+                output = token.close = `)${expression})${extglobStar})`;
+            }
+            if (token.prev.type === 'bos') state.negatedExtglob = true;
         }
         push({
             type: 'paren',
@@ -3731,8 +3753,8 @@ var $EOaiL = parcelRequire("EOaiL");
                 state.index += slashes;
                 if (slashes % 2 !== 0) value += '\\';
             }
-            if (opts.unescape === true) value = advance() || '';
-            else value += advance() || '';
+            if (opts.unescape === true) value = advance();
+            else value += advance();
             if (state.brackets === 0) {
                 push({
                     type: 'text',
@@ -4425,6 +4447,7 @@ $88a8030404f84cc9$exports = (parcelRequire("10orv"));
 const $456741e164e4b362$var$readdir = $456741e164e4b362$require$promisify($jobL2$fs.readdir);
 const $456741e164e4b362$var$stat = $456741e164e4b362$require$promisify($jobL2$fs.stat);
 const $456741e164e4b362$var$lstat = $456741e164e4b362$require$promisify($jobL2$fs.lstat);
+const $456741e164e4b362$var$realpath = $456741e164e4b362$require$promisify($jobL2$fs.realpath);
 /**
  * @typedef {Object} EntryInfo
  * @property {String} path
@@ -4433,11 +4456,13 @@ const $456741e164e4b362$var$lstat = $456741e164e4b362$require$promisify($jobL2$f
  * @property {fs.Dirent=} dirent
  * @property {String} basename
  */ const $456741e164e4b362$var$BANG = '!';
+const $456741e164e4b362$var$RECURSIVE_ERROR_CODE = 'READDIRP_RECURSIVE_ERROR';
 const $456741e164e4b362$var$NORMAL_FLOW_ERRORS = new Set([
     'ENOENT',
     'EPERM',
     'EACCES',
-    'ELOOP'
+    'ELOOP',
+    $456741e164e4b362$var$RECURSIVE_ERROR_CODE
 ]);
 const $456741e164e4b362$var$FILE_TYPE = 'files';
 const $456741e164e4b362$var$DIR_TYPE = 'directories';
@@ -4450,6 +4475,8 @@ const $456741e164e4b362$var$ALL_TYPES = [
     $456741e164e4b362$var$EVERYTHING_TYPE
 ];
 const $456741e164e4b362$var$isNormalFlowError = (error)=>$456741e164e4b362$var$NORMAL_FLOW_ERRORS.has(error.code);
+const [$456741e164e4b362$var$maj, $456741e164e4b362$var$min] = process.versions.node.split('.').slice(0, 2).map((n)=>Number.parseInt(n, 10));
+const $456741e164e4b362$var$wantBigintFsStats = process.platform === 'win32' && ($456741e164e4b362$var$maj > 10 || $456741e164e4b362$var$maj === 10 && $456741e164e4b362$var$min >= 5);
 const $456741e164e4b362$var$normalizeFilter = (filter)=>{
     if (filter === undefined) return;
     if (typeof filter === 'function') return filter;
@@ -4499,7 +4526,7 @@ class $456741e164e4b362$var$ReaddirpStream extends $456741e164e4b362$require$Rea
         this._directoryFilter = $456741e164e4b362$var$normalizeFilter(opts.directoryFilter);
         const statMethod = opts.lstat ? $456741e164e4b362$var$lstat : $456741e164e4b362$var$stat;
         // Use bigint stats if it's windows and stat() supports options (node 10+).
-        if (process.platform === 'win32' && $456741e164e4b362$var$stat.length === 3) this._stat = (path)=>statMethod(path, {
+        if ($456741e164e4b362$var$wantBigintFsStats) this._stat = (path)=>statMethod(path, {
                 bigint: true
             });
         else this._stat = statMethod;
@@ -4523,13 +4550,9 @@ class $456741e164e4b362$var$ReaddirpStream extends $456741e164e4b362$require$Rea
             withFileTypes: this._isDirent
         };
         // Launch stream with one parent, the root dir.
-        try {
-            this.parents = [
-                this._exploreDir(root, 1)
-            ];
-        } catch (error) {
-            this.destroy(error);
-        }
+        this.parents = [
+            this._exploreDir(root, 1)
+        ];
         this.reading = false;
         this.parent = undefined;
     }
@@ -4542,13 +4565,15 @@ class $456741e164e4b362$var$ReaddirpStream extends $456741e164e4b362$require$Rea
                 if (files.length > 0) {
                     const slice = files.splice(0, batch).map((dirent)=>this._formatEntry(dirent, path));
                     for (const entry of (await Promise.all(slice))){
-                        if (this._isDirAndMatchesFilter(entry)) {
+                        if (this.destroyed) return;
+                        const entryType = await this._getEntryType(entry);
+                        if (entryType === 'directory' && this._directoryFilter(entry)) {
                             if (depth <= this._maxDepth) this.parents.push(this._exploreDir(entry.fullPath, depth + 1));
                             if (this._wantsDir) {
                                 this.push(entry);
                                 batch--;
                             }
-                        } else if (this._isFileAndMatchesFilter(entry)) {
+                        } else if ((entryType === 'file' || this._includeAsFile(entry)) && this._fileFilter(entry)) {
                             if (this._wantsFile) {
                                 this.push(entry);
                                 batch--;
@@ -4562,6 +4587,7 @@ class $456741e164e4b362$var$ReaddirpStream extends $456741e164e4b362$require$Rea
                         break;
                     }
                     this.parent = await parent;
+                    if (this.destroyed) return;
                 }
             }
         } catch (error) {
@@ -4584,14 +4610,15 @@ class $456741e164e4b362$var$ReaddirpStream extends $456741e164e4b362$require$Rea
         };
     }
     async _formatEntry(dirent, path) {
-        const basename = this._isDirent ? dirent.name : dirent;
-        const fullPath = $jobL2$path.resolve($jobL2$path.join(path, basename));
-        const entry = {
-            path: $jobL2$path.relative(this._root, fullPath),
-            fullPath: fullPath,
-            basename: basename
-        };
+        let entry;
         try {
+            const basename = this._isDirent ? dirent.name : dirent;
+            const fullPath = $jobL2$path.resolve($jobL2$path.join(path, basename));
+            entry = {
+                path: $jobL2$path.relative(this._root, fullPath),
+                fullPath: fullPath,
+                basename: basename
+            };
             entry[this._statsProp] = this._isDirent ? dirent : await this._stat(fullPath);
         } catch (err) {
             this._onError(err);
@@ -4600,18 +4627,38 @@ class $456741e164e4b362$var$ReaddirpStream extends $456741e164e4b362$require$Rea
     }
     _onError(err) {
         if ($456741e164e4b362$var$isNormalFlowError(err) && !this.destroyed) this.emit('warn', err);
-        else throw err;
+        else this.destroy(err);
     }
-    _isDirAndMatchesFilter(entry) {
+    async _getEntryType(entry) {
         // entry may be undefined, because a warning or an error were emitted
         // and the statsProp is undefined
         const stats = entry && entry[this._statsProp];
-        return stats && stats.isDirectory() && this._directoryFilter(entry);
+        if (!stats) return;
+        if (stats.isFile()) return 'file';
+        if (stats.isDirectory()) return 'directory';
+        if (stats && stats.isSymbolicLink()) {
+            const full = entry.fullPath;
+            try {
+                const entryRealPath = await $456741e164e4b362$var$realpath(full);
+                const entryRealPathStats = await $456741e164e4b362$var$lstat(entryRealPath);
+                if (entryRealPathStats.isFile()) return 'file';
+                if (entryRealPathStats.isDirectory()) {
+                    const len = entryRealPath.length;
+                    if (full.startsWith(entryRealPath) && full.substr(len, 1) === $jobL2$path.sep) {
+                        const recursiveError = new Error(`Circular symlink detected: "${full}" points to "${entryRealPath}"`);
+                        recursiveError.code = $456741e164e4b362$var$RECURSIVE_ERROR_CODE;
+                        return this._onError(recursiveError);
+                    }
+                    return 'directory';
+                }
+            } catch (error) {
+                this._onError(error);
+            }
+        }
     }
-    _isFileAndMatchesFilter(entry) {
+    _includeAsFile(entry) {
         const stats = entry && entry[this._statsProp];
-        const isFileType = stats && (this._wantsEverything && !stats.isDirectory() || stats.isFile() || stats.isSymbolicLink());
-        return isFileType && this._fileFilter(entry);
+        return stats && this._wantsEverything && !stats.isDirectory();
     }
 }
 /**
@@ -4717,7 +4764,7 @@ const $f5959669493a446c$var$arrify = (item)=>Array.isArray(item) ? item : [
     const isList = Array.isArray(args);
     const _path = isList ? args[0] : args;
     if (!isList && typeof _path !== 'string') throw new TypeError('anymatch: second argument must be a string: got ' + Object.prototype.toString.call(_path));
-    const path = $ed97ceaedff2b272$exports(_path);
+    const path = $ed97ceaedff2b272$exports(_path, false);
     for(let index = 0; index < negPatterns.length; index++){
         const nglob = negPatterns[index];
         if (nglob(path)) return returnIndex ? -1 : false;
@@ -4745,7 +4792,7 @@ const $f5959669493a446c$var$arrify = (item)=>Array.isArray(item) ? item : [
     // Early cache for matchers.
     const mtchers = $f5959669493a446c$var$arrify(matchers);
     const negatedGlobs = mtchers.filter((item)=>typeof item === 'string' && item.charAt(0) === $f5959669493a446c$var$BANG).map((item)=>item.slice(1)).map((item)=>$88a8030404f84cc9$exports(item, opts));
-    const patterns = mtchers.map((matcher)=>$f5959669493a446c$var$createPattern(matcher, opts));
+    const patterns = mtchers.filter((item)=>typeof item !== 'string' || typeof item === 'string' && item.charAt(0) !== $f5959669493a446c$var$BANG).map((matcher)=>$f5959669493a446c$var$createPattern(matcher, opts));
     if (testString == null) return (testString, ri = false)=>{
         const returnIndex = typeof ri === 'boolean' ? ri : false;
         return $f5959669493a446c$var$matchPatterns(patterns, negatedGlobs, testString, returnIndex);
@@ -6053,6 +6100,8 @@ var $a5e788ff2081a817$export$a0b169ab89fb4dd5;
 var $a5e788ff2081a817$export$57e12204d17739a6;
 var $a5e788ff2081a817$export$5b2fb8531de5302e;
 var $a5e788ff2081a817$export$5e66a1c305e8c898;
+var $a5e788ff2081a817$export$c524f48a25aeae73;
+var $a5e788ff2081a817$export$ef83f7bc565d8f47;
 var $a5e788ff2081a817$export$a98e8a5440bcaa5f;
 var $a5e788ff2081a817$export$561ec8349f2cc2df;
 var $a5e788ff2081a817$export$4db44f0d1d1cfa26;
@@ -6066,6 +6115,7 @@ var $a5e788ff2081a817$export$c33b7f744dba3152;
 var $a5e788ff2081a817$export$be0c82dadca9dc5e;
 var $a5e788ff2081a817$export$958236a95b4186ff;
 var $a5e788ff2081a817$export$98238152dfccf046;
+var $a5e788ff2081a817$export$11d7cc41d12b28b6;
 var $a5e788ff2081a817$export$4f673f14d1ecee2f;
 var $a5e788ff2081a817$export$24168a3ade45a8d6;
 var $a5e788ff2081a817$export$99063ccd25c1359b;
@@ -6083,10 +6133,13 @@ var $a5e788ff2081a817$export$ca975a673560c9f5;
 var $a5e788ff2081a817$export$90ac18bb05d4efdc;
 var $a5e788ff2081a817$export$f993c945890e93ba;
 var $a5e788ff2081a817$export$527179d397a2edf8;
+var $a5e788ff2081a817$export$a10d59b01729022b;
+var $a5e788ff2081a817$export$18a17cfedf1cbd16;
 'use strict';
 
 var $a5e788ff2081a817$require$sep = $jobL2$path.sep;
 const { platform: $a5e788ff2081a817$var$platform } = process;
+
 $a5e788ff2081a817$export$6491a90e82d3f6e2 = 'all';
 $a5e788ff2081a817$export$c20c948702454b1 = 'ready';
 $a5e788ff2081a817$export$d4cf4f0ec78d3f17 = 'add';
@@ -6105,6 +6158,8 @@ $a5e788ff2081a817$export$a0b169ab89fb4dd5 = 'deleted';
 $a5e788ff2081a817$export$57e12204d17739a6 = 'moved';
 $a5e788ff2081a817$export$5b2fb8531de5302e = 'cloned';
 $a5e788ff2081a817$export$5e66a1c305e8c898 = 'unknown';
+$a5e788ff2081a817$export$c524f48a25aeae73 = 1;
+$a5e788ff2081a817$export$ef83f7bc565d8f47 = 'file';
 $a5e788ff2081a817$export$a98e8a5440bcaa5f = 'directory';
 $a5e788ff2081a817$export$561ec8349f2cc2df = 'symlink';
 $a5e788ff2081a817$export$4db44f0d1d1cfa26 = 'listeners';
@@ -6122,6 +6177,7 @@ $a5e788ff2081a817$export$c33b7f744dba3152 = /[/\\]/;
 $a5e788ff2081a817$export$be0c82dadca9dc5e = /\..*\.(sw[px])$|~$|\.subl.*\.tmp/;
 $a5e788ff2081a817$export$958236a95b4186ff = /^\.[/\\]/;
 $a5e788ff2081a817$export$98238152dfccf046 = '/';
+$a5e788ff2081a817$export$11d7cc41d12b28b6 = '//';
 $a5e788ff2081a817$export$4f673f14d1ecee2f = '{';
 $a5e788ff2081a817$export$24168a3ade45a8d6 = '!';
 $a5e788ff2081a817$export$99063ccd25c1359b = '.';
@@ -6141,9 +6197,12 @@ $a5e788ff2081a817$export$ca975a673560c9f5 = ()=>{};
 $a5e788ff2081a817$export$90ac18bb05d4efdc = (val)=>val;
 $a5e788ff2081a817$export$f993c945890e93ba = $a5e788ff2081a817$var$platform === 'win32';
 $a5e788ff2081a817$export$527179d397a2edf8 = $a5e788ff2081a817$var$platform === 'darwin';
+$a5e788ff2081a817$export$a10d59b01729022b = $a5e788ff2081a817$var$platform === 'linux';
+$a5e788ff2081a817$export$18a17cfedf1cbd16 = $jobL2$os.type() === 'OS400';
 
 
 var $8c382650397dddff$require$isWindows = $a5e788ff2081a817$export$f993c945890e93ba;
+var $8c382650397dddff$require$isLinux = $a5e788ff2081a817$export$a10d59b01729022b;
 var $8c382650397dddff$require$EMPTY_FN = $a5e788ff2081a817$export$ca975a673560c9f5;
 var $8c382650397dddff$require$EMPTY_STR = $a5e788ff2081a817$export$8814a5b46a5894e7;
 var $8c382650397dddff$require$KEY_LISTENERS = $a5e788ff2081a817$export$4db44f0d1d1cfa26;
@@ -6424,8 +6483,7 @@ const $8c382650397dddff$var$FsWatchFileInstances = new Map();
         let prevStats = stats;
         // if the file is already being watched, do nothing
         if (parent.has(basename)) return;
-        // kick off the watcher
-        const closer = this._watchWithNodeFs(file, async (path, newStats)=>{
+        const listener = async (path, newStats)=>{
             if (!this.fsw._throttle($8c382650397dddff$var$THROTTLE_MODE_WATCH, file, 5)) return;
             if (!newStats || newStats.mtimeMs === 0) try {
                 const newStats = await $8c382650397dddff$var$stat(file);
@@ -6434,7 +6492,11 @@ const $8c382650397dddff$var$FsWatchFileInstances = new Map();
                 const at = newStats.atimeMs;
                 const mt = newStats.mtimeMs;
                 if (!at || at <= mt || mt !== prevStats.mtimeMs) this.fsw._emit($8c382650397dddff$require$EV_CHANGE, file, newStats);
-                prevStats = newStats;
+                if ($8c382650397dddff$require$isLinux && prevStats.ino !== newStats.ino) {
+                    this.fsw._closeFile(path);
+                    prevStats = newStats;
+                    this.fsw._addPathCloser(path, this._watchWithNodeFs(file, listener));
+                } else prevStats = newStats;
             } catch (error) {
                 // Fix issues where mtime is null but file is still present
                 this.fsw._remove(dirname, basename);
@@ -6446,7 +6508,9 @@ const $8c382650397dddff$var$FsWatchFileInstances = new Map();
                 if (!at || at <= mt || mt !== prevStats.mtimeMs) this.fsw._emit($8c382650397dddff$require$EV_CHANGE, file, newStats);
                 prevStats = newStats;
             }
-        });
+        };
+        // kick off the watcher
+        const closer = this._watchWithNodeFs(file, listener);
         // emit an add event if we're supposed to
         if (!(initialAdd && this.fsw.options.ignoreInitial) && this.fsw._isntIgnored(file)) {
             if (!this.fsw._throttle($8c382650397dddff$require$EV_ADD, file, 0)) return;
@@ -6468,7 +6532,13 @@ const $8c382650397dddff$var$FsWatchFileInstances = new Map();
         if (!this.fsw.options.followSymlinks) {
             // watch symlink directly (don't follow) and detect changes
             this.fsw._incrReadyCount();
-            const linkPath = await $8c382650397dddff$var$fsrealpath(path);
+            let linkPath;
+            try {
+                linkPath = await $8c382650397dddff$var$fsrealpath(path);
+            } catch (e) {
+                this.fsw._emitReady();
+                return true;
+            }
             if (this.fsw.closed) return;
             if (dir.has(item)) {
                 if (this.fsw._symlinkPaths.get(full) !== linkPath) {
@@ -6616,12 +6686,13 @@ const $8c382650397dddff$var$FsWatchFileInstances = new Map();
             const follow = this.fsw.options.followSymlinks && !path.includes($8c382650397dddff$require$STAR) && !path.includes($8c382650397dddff$require$BRACE_START);
             let closer;
             if (stats.isDirectory()) {
+                const absPath = $jobL2$path.resolve(path);
                 const targetPath = follow ? await $8c382650397dddff$var$fsrealpath(path) : path;
                 if (this.fsw.closed) return;
                 closer = await this._handleDir(wh.watchPath, stats, initialAdd, depth, target, wh, targetPath);
                 if (this.fsw.closed) return;
                 // preserve this symlink's target path
-                if (path !== targetPath && targetPath !== undefined) this.fsw._symlinkPaths.set(targetPath, true);
+                if (absPath !== targetPath && targetPath !== undefined) this.fsw._symlinkPaths.set(absPath, targetPath);
             } else if (stats.isSymbolicLink()) {
                 const targetPath = follow ? await $8c382650397dddff$var$fsrealpath(path) : path;
                 if (this.fsw.closed) return;
@@ -6682,6 +6753,8 @@ var $dd63bec0e4ae5025$require$FSEVENT_MODIFIED = $a5e788ff2081a817$export$e2c555
 var $dd63bec0e4ae5025$require$FSEVENT_DELETED = $a5e788ff2081a817$export$a0b169ab89fb4dd5;
 var $dd63bec0e4ae5025$require$FSEVENT_MOVED = $a5e788ff2081a817$export$57e12204d17739a6;
 var $dd63bec0e4ae5025$require$FSEVENT_UNKNOWN = $a5e788ff2081a817$export$5e66a1c305e8c898;
+var $dd63bec0e4ae5025$require$FSEVENT_FLAG_MUST_SCAN_SUBDIRS = $a5e788ff2081a817$export$c524f48a25aeae73;
+var $dd63bec0e4ae5025$require$FSEVENT_TYPE_FILE = $a5e788ff2081a817$export$ef83f7bc565d8f47;
 var $dd63bec0e4ae5025$require$FSEVENT_TYPE_DIRECTORY = $a5e788ff2081a817$export$a98e8a5440bcaa5f;
 var $dd63bec0e4ae5025$require$FSEVENT_TYPE_SYMLINK = $a5e788ff2081a817$export$561ec8349f2cc2df;
 var $dd63bec0e4ae5025$require$ROOT_GLOBSTAR = $a5e788ff2081a817$export$7aea8b2438ebc8a7;
@@ -6690,13 +6763,10 @@ var $dd63bec0e4ae5025$require$DOT_SLASH = $a5e788ff2081a817$export$2b445e5c2be2f
 var $dd63bec0e4ae5025$require$FUNCTION_TYPE = $a5e788ff2081a817$export$31a3bc04c4494acf;
 var $dd63bec0e4ae5025$require$EMPTY_FN = $a5e788ff2081a817$export$ca975a673560c9f5;
 var $dd63bec0e4ae5025$require$IDENTITY_FN = $a5e788ff2081a817$export$90ac18bb05d4efdc;
-const $dd63bec0e4ae5025$var$FS_MODE_READ = 'r';
 const $dd63bec0e4ae5025$var$Depth = (value)=>isNaN(value) ? {} : {
         depth: value
     };
 const $dd63bec0e4ae5025$var$stat = $dd63bec0e4ae5025$require$promisify($jobL2$fs.stat);
-const $dd63bec0e4ae5025$var$open = $dd63bec0e4ae5025$require$promisify($jobL2$fs.open);
-const $dd63bec0e4ae5025$var$close = $dd63bec0e4ae5025$require$promisify($jobL2$fs.close);
 const $dd63bec0e4ae5025$var$lstat = $dd63bec0e4ae5025$require$promisify($jobL2$fs.lstat);
 const $dd63bec0e4ae5025$var$realpath = $dd63bec0e4ae5025$require$promisify($jobL2$fs.realpath);
 const $dd63bec0e4ae5025$var$statMethods = {
@@ -6747,8 +6817,8 @@ const $dd63bec0e4ae5025$var$wrongEventFlags = new Set([
  * @param {Function} listener   - called when fsevents emits events
  * @param {Function} rawEmitter - passes data to listeners of the 'raw' event
  * @returns {Function} closer
- */ function $dd63bec0e4ae5025$var$setFSEventsListener(path, realPath, listener, rawEmitter, fsw) {
-    let watchPath = $jobL2$path.extname(path) ? $jobL2$path.dirname(path) : path;
+ */ function $dd63bec0e4ae5025$var$setFSEventsListener(path, realPath, listener, rawEmitter) {
+    let watchPath = $jobL2$path.extname(realPath) ? $jobL2$path.dirname(realPath) : realPath;
     const parentPath = $jobL2$path.dirname(watchPath);
     let cont = $dd63bec0e4ae5025$var$FSEventsWatchers.get(watchPath);
     // If we've accumulated a substantial number of paths that
@@ -6779,7 +6849,8 @@ const $dd63bec0e4ae5025$var$wrongEventFlags = new Set([
             ]),
             rawEmitter: rawEmitter,
             watcher: $dd63bec0e4ae5025$var$createFSEventsInstance(watchPath, (fullPath, flags)=>{
-                if (fsw.closed) return;
+                if (!cont.listeners.size) return;
+                if (flags & $dd63bec0e4ae5025$require$FSEVENT_FLAG_MUST_SCAN_SUBDIRS) return;
                 const info = $dd63bec0e4ae5025$var$fsevents.getInfo(fullPath, flags);
                 cont.listeners.forEach((list)=>{
                     list(fullPath, flags, info);
@@ -6821,6 +6892,9 @@ const $dd63bec0e4ae5025$var$calcDepth = (path, root)=>{
     while(!path.indexOf(root) && (path = $jobL2$path.dirname(path)) !== root)i++;
     return i;
 };
+// returns boolean indicating whether the fsevents' event info has the same type
+// as the one returned by fs.stat
+const $dd63bec0e4ae5025$var$sameTypes = (info, stats)=>info.type === $dd63bec0e4ae5025$require$FSEVENT_TYPE_DIRECTORY && stats.isDirectory() || info.type === $dd63bec0e4ae5025$require$FSEVENT_TYPE_SYMLINK && stats.isSymbolicLink() || info.type === $dd63bec0e4ae5025$require$FSEVENT_TYPE_FILE && stats.isFile();
 /**
  * @mixin
  */ class $dd63bec0e4ae5025$var$FsEventsHandler {
@@ -6843,13 +6917,12 @@ const $dd63bec0e4ae5025$var$calcDepth = (path, root)=>{
         const event = watchedDir.has(item) ? $dd63bec0e4ae5025$require$EV_CHANGE : $dd63bec0e4ae5025$require$EV_ADD;
         this.handleEvent(event, path, fullPath, realPath, parent, watchedDir, item, info, opts);
     }
-    async checkFd(path, fullPath, realPath, parent, watchedDir, item, info, opts) {
+    async checkExists(path, fullPath, realPath, parent, watchedDir, item, info, opts) {
         try {
-            const fd = await $dd63bec0e4ae5025$var$open(path, $dd63bec0e4ae5025$var$FS_MODE_READ);
+            const stats = await $dd63bec0e4ae5025$var$stat(path);
             if (this.fsw.closed) return;
-            await $dd63bec0e4ae5025$var$close(fd);
-            if (this.fsw.closed) return;
-            this.addOrChange(path, fullPath, realPath, parent, watchedDir, item, info, opts);
+            if ($dd63bec0e4ae5025$var$sameTypes(info, stats)) this.addOrChange(path, fullPath, realPath, parent, watchedDir, item, info, opts);
+            else this.handleEvent($dd63bec0e4ae5025$require$EV_UNLINK, path, fullPath, realPath, parent, watchedDir, item, info, opts);
         } catch (error) {
             if (error.code === 'EACCES') this.addOrChange(path, fullPath, realPath, parent, watchedDir, item, info, opts);
             else this.handleEvent($dd63bec0e4ae5025$require$EV_UNLINK, path, fullPath, realPath, parent, watchedDir, item, info, opts);
@@ -6857,9 +6930,10 @@ const $dd63bec0e4ae5025$var$calcDepth = (path, root)=>{
     }
     handleEvent(event, path, fullPath, realPath, parent, watchedDir, item, info, opts) {
         if (this.fsw.closed || this.checkIgnored(path)) return;
-        if (event === $dd63bec0e4ae5025$require$EV_UNLINK) // suppress unlink events on never before seen files
-        {
-            if (info.type === $dd63bec0e4ae5025$require$FSEVENT_TYPE_DIRECTORY || watchedDir.has(item)) this.fsw._remove(parent, item);
+        if (event === $dd63bec0e4ae5025$require$EV_UNLINK) {
+            const isDirectory = info.type === $dd63bec0e4ae5025$require$FSEVENT_TYPE_DIRECTORY;
+            // suppress unlink events on never before seen files
+            if (isDirectory || watchedDir.has(item)) this.fsw._remove(parent, item, isDirectory);
         } else {
             if (event === $dd63bec0e4ae5025$require$EV_ADD) {
                 // track new directories
@@ -6888,8 +6962,7 @@ const $dd63bec0e4ae5025$var$calcDepth = (path, root)=>{
  * @param {Function} globFilter - path filter in case a glob pattern was provided
  * @returns {Function} closer for the watcher instance
 */ _watchWithFsEvents(watchPath, realPath, transform, globFilter) {
-        if (this.fsw.closed) return;
-        if (this.fsw._isIgnored(watchPath)) return;
+        if (this.fsw.closed || this.fsw._isIgnored(watchPath)) return;
         const opts = this.fsw.options;
         const watchCallback = async (fullPath, flags, info)=>{
             if (this.fsw.closed) return;
@@ -6909,19 +6982,19 @@ const $dd63bec0e4ae5025$var$calcDepth = (path, root)=>{
                     } catch (error) {}
                     if (this.fsw.closed) return;
                     if (this.checkIgnored(path, stats)) return;
-                    if (stats) this.addOrChange(path, fullPath, realPath, parent, watchedDir, item, info, opts);
+                    if ($dd63bec0e4ae5025$var$sameTypes(info, stats)) this.addOrChange(path, fullPath, realPath, parent, watchedDir, item, info, opts);
                     else this.handleEvent($dd63bec0e4ae5025$require$EV_UNLINK, path, fullPath, realPath, parent, watchedDir, item, info, opts);
-                } else this.checkFd(path, fullPath, realPath, parent, watchedDir, item, info, opts);
+                } else this.checkExists(path, fullPath, realPath, parent, watchedDir, item, info, opts);
             } else switch(info.event){
                 case $dd63bec0e4ae5025$require$FSEVENT_CREATED:
                 case $dd63bec0e4ae5025$require$FSEVENT_MODIFIED:
                     return this.addOrChange(path, fullPath, realPath, parent, watchedDir, item, info, opts);
                 case $dd63bec0e4ae5025$require$FSEVENT_DELETED:
                 case $dd63bec0e4ae5025$require$FSEVENT_MOVED:
-                    return this.checkFd(path, fullPath, realPath, parent, watchedDir, item, info, opts);
+                    return this.checkExists(path, fullPath, realPath, parent, watchedDir, item, info, opts);
             }
         };
-        const closer = $dd63bec0e4ae5025$var$setFSEventsListener(watchPath, realPath, watchCallback, this.fsw._emitRaw, this.fsw);
+        const closer = $dd63bec0e4ae5025$var$setFSEventsListener(watchPath, realPath, watchCallback, this.fsw._emitRaw);
         this.fsw._emitReady();
         return closer;
     }
@@ -7062,6 +7135,7 @@ var $771fcff429d55e18$require$SLASH_OR_BACK_SLASH_RE = $a5e788ff2081a817$export$
 var $771fcff429d55e18$require$DOT_RE = $a5e788ff2081a817$export$be0c82dadca9dc5e;
 var $771fcff429d55e18$require$REPLACER_RE = $a5e788ff2081a817$export$958236a95b4186ff;
 var $771fcff429d55e18$require$SLASH = $a5e788ff2081a817$export$98238152dfccf046;
+var $771fcff429d55e18$require$SLASH_SLASH = $a5e788ff2081a817$export$11d7cc41d12b28b6;
 var $771fcff429d55e18$require$BRACE_START = $a5e788ff2081a817$export$4f673f14d1ecee2f;
 var $771fcff429d55e18$require$BANG = $a5e788ff2081a817$export$24168a3ade45a8d6;
 var $771fcff429d55e18$require$ONE_DOT = $a5e788ff2081a817$export$99063ccd25c1359b;
@@ -7075,6 +7149,7 @@ var $771fcff429d55e18$require$EMPTY_STR = $a5e788ff2081a817$export$8814a5b46a589
 var $771fcff429d55e18$require$EMPTY_FN = $a5e788ff2081a817$export$ca975a673560c9f5;
 var $771fcff429d55e18$require$isWindows = $a5e788ff2081a817$export$f993c945890e93ba;
 var $771fcff429d55e18$require$isMacos = $a5e788ff2081a817$export$527179d397a2edf8;
+var $771fcff429d55e18$require$isIBMi = $a5e788ff2081a817$export$18a17cfedf1cbd16;
 const $771fcff429d55e18$var$stat = $771fcff429d55e18$require$promisify($jobL2$fs.stat);
 const $771fcff429d55e18$var$readdir = $771fcff429d55e18$require$promisify($jobL2$fs.readdir);
 /**
@@ -7110,9 +7185,14 @@ const $771fcff429d55e18$var$unifyPaths = (paths_)=>{
     if (!paths.every((p)=>typeof p === $771fcff429d55e18$require$STRING_TYPE)) throw new TypeError(`Non-string provided as watch path: ${paths}`);
     return paths.map($771fcff429d55e18$var$normalizePathToUnix);
 };
+// If SLASH_SLASH occurs at the beginning of path, it is not replaced
+//     because "//StoragePC/DrivePool/Movies" is a valid network path
 const $771fcff429d55e18$var$toUnix = (string)=>{
     let str = string.replace($771fcff429d55e18$require$BACK_SLASH_RE, $771fcff429d55e18$require$SLASH);
+    let prepend = false;
+    if (str.startsWith($771fcff429d55e18$require$SLASH_SLASH)) prepend = true;
     while(str.match($771fcff429d55e18$require$DOUBLE_SLASH_RE))str = str.replace($771fcff429d55e18$require$DOUBLE_SLASH_RE, $771fcff429d55e18$require$SLASH);
+    if (prepend) str = $771fcff429d55e18$require$SLASH + str;
     return str;
 };
 // Our version of upath.normalize
@@ -7150,13 +7230,12 @@ const $771fcff429d55e18$var$undef = (opts, key)=>opts[key] === undefined;
         const { items: items } = this;
         if (!items) return;
         items.delete(item);
-        if (!items.size) {
-            const dir = this.path;
-            try {
-                await $771fcff429d55e18$var$readdir(dir);
-            } catch (err) {
-                this._removeWatcher($jobL2$path.dirname(dir), $jobL2$path.basename(dir));
-            }
+        if (items.size > 0) return;
+        const dir = this.path;
+        try {
+            await $771fcff429d55e18$var$readdir(dir);
+        } catch (err) {
+            if (this._removeWatcher) this._removeWatcher($jobL2$path.dirname(dir), $jobL2$path.basename(dir));
         }
     }
     has(item) {
@@ -7281,6 +7360,8 @@ class $771fcff429d55e18$var$WatchHelper {
         // Use polling on Mac if not using fsevents.
         // Other platforms use non-polling fs_watch.
         if ($771fcff429d55e18$var$undef(opts, 'usePolling') && !opts.useFsEvents) opts.usePolling = $771fcff429d55e18$require$isMacos;
+        // Always default to polling on IBM i because fs.watch() is not available on IBM i.
+        if ($771fcff429d55e18$require$isIBMi) opts.usePolling = true;
         // Global override (useful for end-developers that need to force polling for all
         // instances of chokidar, regardless of usage/dependency depth)
         const envPoll = process.env.CHOKIDAR_USEPOLLING;
@@ -7357,7 +7438,7 @@ class $771fcff429d55e18$var$WatchHelper {
         });
         if (this.options.useFsEvents && this._fsEventsHandler) {
             if (!this._readyCount) this._readyCount = paths.length;
-            if (this.options.persistent) this._readyCount *= 2;
+            if (this.options.persistent) this._readyCount += paths.length;
             paths.forEach((path)=>this._fsEventsHandler._addToFsEvents(path));
         } else {
             if (!this._readyCount) this._readyCount = 0;
@@ -7402,7 +7483,7 @@ class $771fcff429d55e18$var$WatchHelper {
  * Close watchers and remove all listeners from watched paths.
  * @returns {Promise<void>}.
 */ close() {
-        if (this.closed) return this;
+        if (this.closed) return this._closePromise;
         this.closed = true;
         // Memory management.
         this.removeAllListeners();
@@ -7425,7 +7506,8 @@ class $771fcff429d55e18$var$WatchHelper {
         ].forEach((key)=>{
             this[`_${key}`].clear();
         });
-        return closers.length ? Promise.all(closers).then(()=>undefined) : Promise.resolve();
+        this._closePromise = closers.length ? Promise.all(closers).then(()=>undefined) : Promise.resolve();
+        return this._closePromise;
     }
     /**
  * Expose list of watched paths
@@ -7510,14 +7592,15 @@ class $771fcff429d55e18$var$WatchHelper {
         }
         if (opts.alwaysStat && val1 === undefined && (event === $771fcff429d55e18$require$EV_ADD || event === $771fcff429d55e18$require$EV_ADD_DIR || event === $771fcff429d55e18$require$EV_CHANGE)) {
             const fullPath = opts.cwd ? $jobL2$path.join(opts.cwd, path) : path;
+            let stats;
             try {
-                const stats = await $771fcff429d55e18$var$stat(fullPath);
-                // Suppress event when fs_stat fails, to avoid sending undefined 'stat'
-                if (!stats) return;
-                args.push(stats);
-                this.emitWithAll(event, args);
+                stats = await $771fcff429d55e18$var$stat(fullPath);
             } catch (err) {}
-        } else this.emitWithAll(event, args);
+            // Suppress event when fs_stat fails, to avoid sending undefined 'stat'
+            if (!stats || this.closed) return;
+            args.push(stats);
+        }
+        this.emitWithAll(event, args);
         return this;
     }
     /**
@@ -7676,13 +7759,13 @@ class $771fcff429d55e18$var$WatchHelper {
  * @param {String} directory within which the following item is located
  * @param {String} item      base path of item/directory
  * @returns {void}
-*/ _remove(directory, item) {
+*/ _remove(directory, item, isDirectory) {
         // if what is being deleted is a directory, get that directory's paths
         // for recursive deleting and cleaning of watched object
         // if it is not a directory, nestedDirectoryChildren will be empty array
         const path = $jobL2$path.join(directory, item);
         const fullPath = $jobL2$path.resolve(path);
-        const isDirectory = this._watched.has(path) || this._watched.has(fullPath);
+        isDirectory = isDirectory != null ? isDirectory : this._watched.has(path) || this._watched.has(fullPath);
         // prevent duplicate handling in case of arriving here nearly simultaneously
         // via multiple paths (such as _handleFile and _handleDir)
         if (!this._throttle('remove', path, 100)) return;
@@ -7698,6 +7781,12 @@ class $771fcff429d55e18$var$WatchHelper {
         const parent = this._getWatchedDir(directory);
         const wasTracked = parent.has(item);
         parent.remove(item);
+        // Fixes issue #1042 -> Relative paths were detected and added as symlinks
+        // (https://github.com/paulmillr/chokidar/blob/e1753ddbc9571bdc33b4a4af172d52cb6e611c10/lib/nodefs-handler.js#L612),
+        // but never removed from the map in case the path was deleted.
+        // This leads to an incorrect state if the path was recreated:
+        // https://github.com/paulmillr/chokidar/blob/e1753ddbc9571bdc33b4a4af172d52cb6e611c10/lib/nodefs-handler.js#L553
+        if (this._symlinkPaths.has(fullPath)) this._symlinkPaths.delete(fullPath);
         // If we wait for this file to be fully written, cancel the wait.
         let relPath = path;
         if (this.options.cwd) relPath = $jobL2$path.relative(this.options.cwd, path);
@@ -7715,15 +7804,21 @@ class $771fcff429d55e18$var$WatchHelper {
         if (!this.options.useFsEvents) this._closePath(path);
     }
     /**
- *
+ * Closes all watchers for a path
  * @param {Path} path
  */ _closePath(path) {
+        this._closeFile(path);
+        const dir = $jobL2$path.dirname(path);
+        this._getWatchedDir(dir).remove($jobL2$path.basename(path));
+    }
+    /**
+ * Closes only file-specific watchers
+ * @param {Path} path
+ */ _closeFile(path) {
         const closers = this._closers.get(path);
         if (!closers) return;
         closers.forEach((closer)=>closer());
         this._closers.delete(path);
-        const dir = $jobL2$path.dirname(path);
-        this._getWatchedDir(dir).remove($jobL2$path.basename(path));
     }
     /**
  *
@@ -7800,11 +7895,6 @@ class $27eaa98c9bbb9ca3$export$2e2bcd8739ae039 {
         this.fswatcher = (0, (/*@__PURE__*/$parcel$interopDefault($771fcff429d55e18$exports))).watch(this.pdfPathname);
         this.fswatcher.on('add', (path)=>this.handleFilechange('add', path));
         this.fswatcher.on('change', (path)=>this.handleFilechange('change', path));
-        console.log(this.fswatcher);
-        // inject style
-        // this.injectStyle()
-        // inject style again when theme changed
-        this.subscriptions.add();
         // make external links functional
         this.element.contentWindow.addEventListener('click', (event)=>this.handleLink(event));
         // control keyboard shortcuts
@@ -7816,15 +7906,6 @@ class $27eaa98c9bbb9ca3$export$2e2bcd8739ae039 {
     // // SyncTeX through right-click
     // this.element.contentWindow.addEventListener('contextmenu',
     //   (event) => this.handleSynctex(event))
-    }
-    // compile the viewer-specific LESS into CSS
-    // and inject it into the viewer iframe's style element
-    injectStyle() {
-        const lessFile = (0, ($parcel$interopDefault($jobL2$path))).join(atom.packages.getLoadedPackage('pulsar-pdf-viewer').path, 'pdfjs', 'web', 'viewer.less');
-        var css = atom.themes.loadLessStylesheet(lessFile);
-        const invertColors = atom.config.get('pulsar-pdf-viewer.invertColors');
-        if (invertColors) css += '.page, .thumbnailImage {filter: invert(100%);}\n';
-        this.element.contentDocument.getElementById('viewer-less').innerText = css;
     }
     // handle clicks on external links
     handleLink(event) {
@@ -8019,12 +8100,6 @@ var $e3844875fba73d3c$export$2e2bcd8739ae039 = {
         'overrideFingerprint': {
             'title': 'Override PDF ID',
             'description': 'When a PDF is loaded in an existing viewer, PDF.js compares the ID embedded in the PDF (it\'s "fingerprint") with the previous one and resets the view (position, zoom, etc.) if they are different. This can happen even for the "same" document if it is dynamically regenerated, e.g. by LaTeX. If this option is checked, the PDF ID is overwritten by the pathname of the document, so view properties should stay the same as long as the pathname stays the same. __experimental__',
-            'type': 'boolean',
-            'default': 'false'
-        },
-        'invertColors': {
-            'title': 'Invert PDF colors',
-            'description': 'This is intended to provide a better match for dark UI themes. Needs reload of the PDF viewer tab.',
             'type': 'boolean',
             'default': 'false'
         },
